@@ -2,3 +2,5 @@ build/
 .DS_Store
 *.user
 compile_commands.json
+*.dmg
+*.exe

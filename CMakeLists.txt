@@ -54,6 +54,56 @@ if(NOT WIN32)
   add_subdirectory(apps/maestro-cli)
 endif()
 
+# Qt6 desktop GUI (opt-in).
+if(MAESTRO_WITH_QT)
+  # Qt 6.8's FindWrapOpenGL falls back to a literal "-framework AGL" when AGL is
+  # absent. AGL was removed from modern macOS SDKs, breaking the link. Nothing
+  # actually calls AGL, so we generate an empty stub AGL.framework and put it on
+  # the framework search path. macOS-only; other platforms are untouched.
+  if(APPLE)
+    set(_agl_stub_dir "${CMAKE_BINARY_DIR}/agl-stub")
+    if(NOT EXISTS "${_agl_stub_dir}/AGL.framework/AGL")
+      file(MAKE_DIRECTORY "${_agl_stub_dir}/AGL.framework")
+      execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -dynamiclib -x c /dev/null
+                -install_name @rpath/AGL.framework/AGL
+                -o "${_agl_stub_dir}/AGL.framework/AGL"
+        RESULT_VARIABLE _agl_rc)
+      if(NOT _agl_rc EQUAL 0)
+        message(WARNING "Failed to build AGL stub; Qt link may fail.")
+      endif()
+    endif()
+    unset(WrapOpenGL_AGL CACHE) # force re-resolution against the stub
+    list(PREPEND CMAKE_FRAMEWORK_PATH "${_agl_stub_dir}")
+  endif()
+
+  find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  add_subdirectory(apps/maestro-desktop)
+endif()
+
 if(MAESTRO_BUILD_TESTS)
   add_subdirectory(tests)
+endif()
+
+# --- Packaging: produce a DMG on macOS, an NSIS installer on Windows ---
+if(MAESTRO_WITH_QT)
+  set(CPACK_PACKAGE_NAME "Maestro")
+  set(CPACK_PACKAGE_VENDOR "Maestro")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "AI orchestration platform for local coding CLIs")
+  set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+  set(CPACK_PACKAGE_INSTALL_DIRECTORY "Maestro")
+
+  if(APPLE)
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_DMG_VOLUME_NAME "Maestro")
+  elseif(WIN32)
+    set(CPACK_GENERATOR "NSIS")
+    set(CPACK_NSIS_PACKAGE_NAME "Maestro")
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_PACKAGE_EXECUTABLES "maestro-desktop" "Maestro")
+  else()
+    set(CPACK_GENERATOR "TGZ")
+  endif()
+
+  include(CPack)
 endif()

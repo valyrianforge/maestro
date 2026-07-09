@@ -14,7 +14,7 @@ std::string Orchestrator::artifactKey(const Task& task) {
     return "task/" + task.name + "/output";
 }
 
-void Orchestrator::emit(const OrchestratorEvent& event) const {
+void Orchestrator::emitEvent(const OrchestratorEvent& event) const {
     if (observer_) {
         observer_(event);
     }
@@ -63,7 +63,7 @@ RunReport Orchestrator::run() {
             const AgentId agent = acquireAgent(provider, id);
             graph_.markRunning(id);
             report.executionOrder.push_back(id);
-            emit(OrchestratorEvent{OrchestratorEvent::Type::TaskStarted, id, agent, name});
+            emitEvent(OrchestratorEvent{OrchestratorEvent::Type::TaskStarted, id, agent, name});
 
             ExecRequest request;
             request.provider = provider;
@@ -74,10 +74,10 @@ RunReport Orchestrator::run() {
             if (result.success) {
                 graph_.markSucceeded(id, result.output);
                 workspace_.putArtifact(artifactKey(graph_.at(id)), result.output);
-                emit(OrchestratorEvent{OrchestratorEvent::Type::TaskSucceeded, id, agent, name});
+                emitEvent(OrchestratorEvent{OrchestratorEvent::Type::TaskSucceeded, id, agent, name});
             } else {
                 graph_.markFailed(id);
-                emit(OrchestratorEvent{OrchestratorEvent::Type::TaskFailed, id, agent,
+                emitEvent(OrchestratorEvent{OrchestratorEvent::Type::TaskFailed, id, agent,
                                        result.output});
             }
             agents_.setStatus(agent, AgentStatus::Idle, std::nullopt);

@@ -48,7 +48,7 @@ public:
 
 private:
     [[nodiscard]] std::string composePrompt(const Task& task) const;
-    void emit(const OrchestratorEvent& event) const;
+    void emitEvent(const OrchestratorEvent& event) const;
     AgentId acquireAgent(const ProviderId& provider, TaskId task);
 
     TaskGraph& graph_;
