@@ -20,6 +20,8 @@ void Scheduler::setObserver(std::function<void(const OrchestratorEvent&)> observ
     observer_ = std::move(observer);
 }
 
+void Scheduler::setExpander(Expander expander) { expander_ = std::move(expander); }
+
 std::string Scheduler::artifactKey(const Task& task) { return "task/" + task.name + "/output"; }
 
 void Scheduler::emitEvent(const OrchestratorEvent& event) const {
@@ -126,6 +128,16 @@ RunReport Scheduler::run() {
                 workspace_.putArtifact(artifactKey(graph_.at(c.task)), c.result.output);
                 emitEvent(OrchestratorEvent{OrchestratorEvent::Type::TaskSucceeded, c.task,
                                             c.agent, graph_.at(c.task).name});
+                if (expander_) {
+                    const std::string parentName = graph_.at(c.task).name;
+                    std::vector<Task> children = expander_(graph_.at(c.task), c.result);
+                    for (Task& child : children) {
+                        const TaskId childId = graph_.addTask(std::move(child));
+                        graph_.addDependency(childId, c.task); // forward parent's output
+                        emitEvent(OrchestratorEvent{OrchestratorEvent::Type::TaskSpawned, childId,
+                                                    AgentId{}, parentName});
+                    }
+                }
             } else if (retries_[c.task] < config_.maxRetries) {
                 ++retries_[c.task];
                 graph_.at(c.task).state = TaskState::Pending; // requeue for another attempt

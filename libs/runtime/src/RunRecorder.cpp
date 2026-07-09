@@ -13,6 +13,7 @@ const char* eventTypeName(orch::OrchestratorEvent::Type t) {
     case orch::OrchestratorEvent::Type::TaskFailed:    return "TaskFailed";
     case orch::OrchestratorEvent::Type::TaskBlocked:   return "TaskBlocked";
     case orch::OrchestratorEvent::Type::TaskRetrying:  return "TaskRetrying";
+    case orch::OrchestratorEvent::Type::TaskSpawned:   return "TaskSpawned";
     }
     return "Unknown";
 }

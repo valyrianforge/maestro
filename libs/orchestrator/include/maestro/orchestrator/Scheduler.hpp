@@ -17,7 +17,14 @@ namespace maestro::orchestrator {
 
 // Progress notification emitted as the graph advances (for UI/logging).
 struct OrchestratorEvent {
-    enum class Type { TaskStarted, TaskSucceeded, TaskFailed, TaskBlocked, TaskRetrying };
+    enum class Type {
+        TaskStarted,
+        TaskSucceeded,
+        TaskFailed,
+        TaskBlocked,
+        TaskRetrying,
+        TaskSpawned, // a subagent/child task was created at runtime (detail = parent name)
+    };
     Type type{Type::TaskStarted};
     TaskId task;
     AgentId agent;
@@ -50,6 +57,13 @@ public:
 
     void setObserver(std::function<void(const OrchestratorEvent&)> observer);
 
+    // Optional hook: when a task succeeds, the expander may inspect its result
+    // and return child tasks to add to the live graph. Each child is linked to
+    // depend on the completed parent (so the parent's output is forwarded into
+    // it), making the graph grow at runtime — i.e. agents spawning subagents.
+    using Expander = std::function<std::vector<Task>(const Task& parent, const TaskResult&)>;
+    void setExpander(Expander expander);
+
     // Halt/allow dispatch of new tasks. In-flight tasks always run to completion.
     void pause();
     void resume();
@@ -79,6 +93,7 @@ private:
     AgentManager& agents_;
     SchedulerConfig config_;
     std::function<void(const OrchestratorEvent&)> observer_;
+    Expander expander_;
 
     std::mutex mtx_;
     std::condition_variable cv_;

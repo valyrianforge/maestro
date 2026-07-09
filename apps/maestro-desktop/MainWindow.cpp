@@ -13,10 +13,12 @@
 #include <QTableWidgetItem>
 #include <QTextCursor>
 #include <QTextEdit>
+#include <QSplitter>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include "EngineController.hpp"
+#include "GraphCanvas.hpp"
 
 namespace maestro::desktop {
 
@@ -29,6 +31,7 @@ MainWindow::MainWindow(EngineController* controller, QWidget* parent)
     connect(controller_, &EngineController::runFinished, this, &MainWindow::onRunFinished);
     connect(controller_, &EngineController::logMessage, this, &MainWindow::onLogMessage);
     connect(controller_, &EngineController::taskAdded, this, &MainWindow::onTaskAdded);
+    connect(controller_, &EngineController::edgeAdded, this, &MainWindow::onEdgeAdded);
     connect(controller_, &EngineController::taskStateChanged, this,
             &MainWindow::onTaskStateChanged);
     connect(controller_, &EngineController::assistantText, this, &MainWindow::onAssistantText);
@@ -47,7 +50,9 @@ void MainWindow::buildUi() {
     promptEdit_->setPlaceholderText("Enter a topic (pipeline) or a prompt (single)…");
     modeCombo_ = new QComboBox(bar);
     modeCombo_->addItem("Pipeline: research → draft → critique");
+    modeCombo_->addItem("Fan-out (4 parallel agents)");
     modeCombo_->addItem("Single prompt");
+    modeCombo_->addItem("Auto-plan (spawn subagents)");
     runButton_ = new QPushButton("Run", bar);
     runButton_->setDefault(true);
     barLayout->addWidget(new QLabel("Goal:", bar));
@@ -55,16 +60,23 @@ void MainWindow::buildUi() {
     barLayout->addWidget(modeCombo_);
     barLayout->addWidget(runButton_);
 
-    // --- Center: conversation / output ---
+    // --- Center: live agent graph (top) + streaming conversation (bottom) ---
+    graph_ = new GraphCanvas(this);
     conversation_ = new QTextEdit(this);
     conversation_->setReadOnly(true);
     conversation_->setPlaceholderText("Agent output will stream here.");
+
+    auto* split = new QSplitter(Qt::Vertical, this);
+    split->addWidget(graph_);
+    split->addWidget(conversation_);
+    split->setStretchFactor(0, 3);
+    split->setStretchFactor(1, 2);
 
     auto* center = new QWidget(this);
     auto* centerLayout = new QVBoxLayout(center);
     centerLayout->setContentsMargins(0, 0, 0, 0);
     centerLayout->addWidget(bar);
-    centerLayout->addWidget(conversation_, 1);
+    centerLayout->addWidget(split, 1);
     setCentralWidget(center);
 
     // --- Left dock: agents + tasks ---
@@ -124,17 +136,14 @@ void MainWindow::onRunClicked() {
         return;
     }
     conversation_->clear();
+    graph_->clearGraph();
     tasksTable_->setRowCount(0);
     agentsTable_->setRowCount(0);
     taskRow_.clear();
     agentRow_.clear();
     lastStreamTask_.clear();
 
-    if (modeCombo_->currentIndex() == 0) {
-        controller_->runPipeline(text);
-    } else {
-        controller_->runSingle(text);
-    }
+    controller_->start(modeCombo_->currentIndex(), text);
 }
 
 void MainWindow::onRunStarted() {
@@ -153,17 +162,24 @@ void MainWindow::onRunFinished(int succeeded, int failed, int blocked) {
 void MainWindow::onLogMessage(const QString& line) { logs_->appendPlainText(line); }
 
 void MainWindow::onTaskAdded(const QString& name, const QString& provider) {
+    if (taskRow_.contains(name)) {
+        return;
+    }
     const int row = tasksTable_->rowCount();
     tasksTable_->insertRow(row);
     tasksTable_->setItem(row, 0, new QTableWidgetItem(name + "  (" + provider + ")"));
     tasksTable_->setItem(row, 1, new QTableWidgetItem("pending"));
     taskRow_.insert(name, row);
+    graph_->addNode(name, provider);
 }
+
+void MainWindow::onEdgeAdded(const QString& from, const QString& to) { graph_->addEdge(from, to); }
 
 void MainWindow::onTaskStateChanged(const QString& name, const QString& state) {
     if (const auto it = taskRow_.constFind(name); it != taskRow_.constEnd()) {
         tasksTable_->setItem(it.value(), 1, new QTableWidgetItem(state));
     }
+    graph_->setNodeState(name, state);
 }
 
 void MainWindow::onAssistantText(const QString& taskName, const QString& text) {

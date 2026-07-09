@@ -22,6 +22,11 @@ public:
         scheduler_.setObserver(std::move(observer));
     }
 
+    // Enable dynamic subagent spawning (see Scheduler::setExpander).
+    void setExpander(Scheduler::Expander expander) {
+        scheduler_.setExpander(std::move(expander));
+    }
+
     RunReport run() { return scheduler_.run(); }
 
     void pause() { scheduler_.pause(); }

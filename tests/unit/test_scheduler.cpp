@@ -181,6 +181,69 @@ TEST_CASE("forwarded context reaches the dependent under the scheduler", "[sched
     REQUIRE(draftSawContext);
 }
 
+TEST_CASE("a task can spawn subagents that run and grow the graph", "[scheduler]") {
+    TaskGraph g;
+    g.addTask(step("planner"));
+
+    ConcurrentFakeExecutor exec([](const ExecRequest&) { return ok("child-output"); },
+                                std::chrono::milliseconds{0});
+    WorkspaceManager ws;
+    AgentManager agents;
+    Scheduler sched(g, exec, ws, agents, SchedulerConfig{4, 0});
+
+    int spawned = 0;
+    sched.setObserver([&](const OrchestratorEvent& e) {
+        if (e.type == OrchestratorEvent::Type::TaskSpawned) {
+            ++spawned;
+        }
+    });
+    // Planner spawns 3 subagents; subagents spawn nothing (empty prompt sentinel).
+    sched.setExpander([](const Task& parent, const TaskResult&) {
+        std::vector<Task> children;
+        if (parent.name == "planner") {
+            for (int i = 0; i < 3; ++i) {
+                children.push_back(step("sub-" + std::to_string(i)));
+            }
+        }
+        return children;
+    });
+
+    const RunReport report = sched.run();
+
+    REQUIRE(spawned == 3);
+    REQUIRE(report.succeeded == 4);   // planner + 3 subagents
+    REQUIRE(g.size() == 4);           // graph grew at runtime
+}
+
+TEST_CASE("spawned subagents receive the parent's output as context", "[scheduler]") {
+    TaskGraph g;
+    g.addTask(step("planner"));
+
+    ConcurrentFakeExecutor exec([](const ExecRequest&) { return ok("PLAN"); },
+                                std::chrono::milliseconds{0});
+    WorkspaceManager ws;
+    AgentManager agents;
+    Scheduler sched(g, exec, ws, agents, SchedulerConfig{2, 0});
+    sched.setExpander([](const Task& parent, const TaskResult&) {
+        std::vector<Task> children;
+        if (parent.name == "planner") {
+            children.push_back(step("worker"));
+        }
+        return children;
+    });
+    sched.run();
+
+    const auto prompts = exec.prompts();
+    bool workerSawPlan = false;
+    for (const auto& p : prompts) {
+        if (p.find("## Context from step \"planner\":") != std::string::npos &&
+            p.find("PLAN") != std::string::npos) {
+            workerSawPlan = true;
+        }
+    }
+    REQUIRE(workerSawPlan);
+}
+
 TEST_CASE("pause halts dispatch and resume finishes the run", "[scheduler]") {
     TaskGraph g;
     for (int i = 0; i < 4; ++i) {

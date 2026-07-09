@@ -13,6 +13,7 @@ class QLabel;
 namespace maestro::desktop {
 
 class EngineController;
+class GraphCanvas;
 
 // IDE-style main window: a prompt/topic bar, an agent list and task queue on the
 // left, a streaming conversation view in the center, and a live log dock at the
@@ -28,6 +29,7 @@ private slots:
     void onRunFinished(int succeeded, int failed, int blocked);
     void onLogMessage(const QString& line);
     void onTaskAdded(const QString& name, const QString& provider);
+    void onEdgeAdded(const QString& from, const QString& to);
     void onTaskStateChanged(const QString& name, const QString& state);
     void onAssistantText(const QString& taskName, const QString& text);
     void onAgentStatus(quint64 agentId, const QString& provider, const QString& status);
@@ -41,6 +43,7 @@ private:
     QComboBox* modeCombo_{nullptr};
     QPushButton* runButton_{nullptr};
     QTextEdit* conversation_{nullptr};
+    GraphCanvas* graph_{nullptr};
     QPlainTextEdit* logs_{nullptr};
     QTableWidget* agentsTable_{nullptr};
     QTableWidget* tasksTable_{nullptr};
