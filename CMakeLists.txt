@@ -17,9 +17,19 @@ option(MAESTRO_BUILD_TESTS "Build unit tests" ON)
 
 include(cmake/Warnings.cmake)
 
+include(FetchContent)
+
+# --- Third-party: nlohmann/json (CLI output parsing) ---
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG        v3.11.3
+  GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 # --- Third-party: Catch2 (only when tests are on) ---
 if(MAESTRO_BUILD_TESTS)
-  include(FetchContent)
   FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -34,6 +44,7 @@ endif()
 
 add_subdirectory(libs/core)
 add_subdirectory(libs/process)
+add_subdirectory(libs/providers)
 
 # Console harness (real POSIX process driving). Not built on Windows until the
 # cross-platform QtProcessBackend lands.

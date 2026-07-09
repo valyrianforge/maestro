@@ -26,14 +26,15 @@ private:
 
 struct AgentTag {};
 struct TaskTag {};
-struct SessionTag {};
 struct ProcessTag {};
 
-using AgentId   = Id<AgentTag>;
-using TaskId    = Id<TaskTag>;
-using SessionId = Id<SessionTag>;
+using AgentId = Id<AgentTag>;
+using TaskId  = Id<TaskTag>;
 // Handle identifying a spawned process within the ProcessManager.
 using ProcessHandle = Id<ProcessTag>;
+
+// NOTE: SessionId is intentionally NOT an integer Id. CLI tools identify
+// sessions with opaque strings (e.g. Claude uses UUIDs). See SessionId.hpp.
 
 } // namespace maestro::core
 
