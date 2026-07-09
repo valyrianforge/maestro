@@ -35,6 +35,12 @@ endif()
 add_subdirectory(libs/core)
 add_subdirectory(libs/process)
 
+# Console harness (real POSIX process driving). Not built on Windows until the
+# cross-platform QtProcessBackend lands.
+if(NOT WIN32)
+  add_subdirectory(apps/maestro-cli)
+endif()
+
 if(MAESTRO_BUILD_TESTS)
   add_subdirectory(tests)
 endif()

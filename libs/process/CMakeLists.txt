@@ -1,8 +1,16 @@
 # maestro_process: process lifecycle spine. Qt-free by default; the optional
 # QtProcessBackend (guarded by MAESTRO_WITH_QT) is added later.
-add_library(maestro_process
+set(MAESTRO_PROCESS_SOURCES
   src/ProcessManager.cpp
   src/FakeProcessBackend.cpp)
+
+if(NOT WIN32)
+  # Real POSIX backend (fork/exec/pipe/poll). Cross-platform QtProcessBackend
+  # will supersede this once Qt is wired in.
+  list(APPEND MAESTRO_PROCESS_SOURCES src/PosixProcessBackend.cpp)
+endif()
+
+add_library(maestro_process ${MAESTRO_PROCESS_SOURCES})
 add_library(maestro::process ALIAS maestro_process)
 
 target_include_directories(maestro_process PUBLIC
