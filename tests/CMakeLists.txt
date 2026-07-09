@@ -9,6 +9,7 @@ set(MAESTRO_TEST_SOURCES
   unit/test_agent_manager.cpp
   unit/test_workspace.cpp
   unit/test_orchestrator.cpp
+  unit/test_scheduler.cpp
   unit/test_result_collector.cpp)
 
 if(NOT WIN32)

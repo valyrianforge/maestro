@@ -115,6 +115,11 @@ void EngineController::startRun(bool pipeline, QString text) {
                 emit logMessage("Task '" + name + "' FAILED: " +
                                 QString::fromStdString(e.detail));
                 break;
+            case T::TaskRetrying:
+                emit taskStateChanged(name, "retrying");
+                emit agentStatus(e.agent.value(), provider, "idle");
+                emit logMessage("Task '" + name + "' failed; retrying");
+                break;
             case T::TaskBlocked:
                 emit taskStateChanged(name, "blocked");
                 break;

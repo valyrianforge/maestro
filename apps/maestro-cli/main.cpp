@@ -6,7 +6,9 @@
 //   maestro-cli --exec <cmd> [args...] -> run an arbitrary command (raw passthrough)
 //   maestro-cli                        -> ClaudeProvider with a default prompt
 
+#include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -199,9 +201,70 @@ int runGraph(const std::string& topic) {
     return report.failed == 0 ? 0 : 1;
 }
 
+// Runs N independent Claude tasks concurrently to demonstrate parallelism:
+// wall-clock stays close to a single call rather than N sequential calls.
+int runFan(int n, const std::string& prompt) {
+    rt::ProviderRegistry registry;
+    registry.add(std::make_shared<ClaudeProvider>());
+
+    orch::TaskGraph graph;
+    for (int i = 0; i < n; ++i) {
+        orch::Task t;
+        t.name = "worker-" + std::to_string(i + 1);
+        t.provider = ProviderId{"claude"};
+        t.prompt = prompt + " (answer in one short sentence)";
+        graph.addTask(t);
+    }
+
+    orch::WorkspaceManager workspace;
+    orch::AgentManager agents;
+    rt::ProcessTaskExecutor executor(
+        registry, []() { return std::make_unique<PosixProcessBackend>(); });
+
+    orch::Orchestrator orchestrator(graph, executor, workspace, agents,
+                                    orch::SchedulerConfig{/*maxConcurrency=*/n, /*retries=*/0});
+
+    const auto start = std::chrono::steady_clock::now();
+    auto sinceStart = [&] {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now() - start)
+            .count();
+    };
+
+    orchestrator.setObserver([&](const orch::OrchestratorEvent& e) {
+        using T = orch::OrchestratorEvent::Type;
+        const std::string& name = graph.at(e.task).name;
+        if (e.type == T::TaskStarted) {
+            std::cout << "  [+" << sinceStart() << "ms] " << name << " started\n" << std::flush;
+        } else if (e.type == T::TaskSucceeded) {
+            std::cout << "  [+" << sinceStart() << "ms] " << name << " done\n" << std::flush;
+        }
+    });
+
+    std::cout << "maestro-cli :: fan-out " << n << " concurrent Claude agents\n"
+              << "--------------------------------------------------\n";
+    const orch::RunReport report = orchestrator.run();
+    std::cout << "--------------------------------------------------\n"
+              << report.succeeded << "/" << n << " succeeded in " << sinceStart()
+              << " ms wall-clock (concurrency " << n << ")\n";
+    return report.failed == 0 ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc >= 3 && std::string(argv[1]) == "--fan") {
+        const int n = std::max(1, std::atoi(argv[2]));
+        std::string prompt;
+        for (int i = 3; i < argc; ++i) {
+            if (!prompt.empty()) prompt += ' ';
+            prompt += argv[i];
+        }
+        if (prompt.empty()) {
+            prompt = "Name one interesting fact about the number " + std::to_string(n);
+        }
+        return runFan(n, prompt);
+    }
     if (argc >= 2 && std::string(argv[1]) == "--graph") {
         std::string topic;
         for (int i = 2; i < argc; ++i) {
