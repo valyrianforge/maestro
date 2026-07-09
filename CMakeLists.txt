@@ -45,6 +45,8 @@ endif()
 add_subdirectory(libs/core)
 add_subdirectory(libs/process)
 add_subdirectory(libs/providers)
+add_subdirectory(libs/orchestrator)
+add_subdirectory(libs/runtime)
 
 # Console harness (real POSIX process driving). Not built on Windows until the
 # cross-platform QtProcessBackend lands.

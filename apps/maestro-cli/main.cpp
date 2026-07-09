@@ -8,19 +8,25 @@
 
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "maestro/orchestrator/Orchestrator.hpp"
 #include "maestro/providers/ClaudeProvider.hpp"
 #include "maestro/providers/NdjsonLineReader.hpp"
 #include "maestro/process/PosixProcessBackend.hpp"
 #include "maestro/process/ProcessManager.hpp"
+#include "maestro/runtime/ProcessTaskExecutor.hpp"
+#include "maestro/runtime/ProviderRegistry.hpp"
 
 using namespace maestro::core;
 using namespace maestro::process;
 using maestro::providers::ClaudeProvider;
 using maestro::providers::NdjsonLineReader;
+namespace orch = maestro::orchestrator;
+namespace rt = maestro::runtime;
 
 namespace {
 
@@ -129,9 +135,84 @@ int runWithClaude(const std::string& prompt) {
     return ok ? 0 : 1;
 }
 
+// Runs a fixed 3-agent pipeline over one topic to demonstrate real
+// orchestration: research -> draft -> critique, with the orchestrator forwarding
+// each step's output into the next step's prompt automatically.
+int runGraph(const std::string& topic) {
+    rt::ProviderRegistry registry;
+    registry.add(std::make_shared<ClaudeProvider>());
+
+    orch::TaskGraph graph;
+    orch::Task research;
+    research.name = "research";
+    research.provider = ProviderId{"claude"};
+    research.prompt = "List 3 concise, factual bullet points about: " + topic;
+    const auto researchId = graph.addTask(research);
+
+    orch::Task draft;
+    draft.name = "draft";
+    draft.provider = ProviderId{"claude"};
+    draft.prompt = "Using the research context, write a 3-sentence explanation of: " + topic;
+    const auto draftId = graph.addTask(draft);
+    graph.addDependency(draftId, researchId);
+
+    orch::Task critique;
+    critique.name = "critique";
+    critique.provider = ProviderId{"claude"};
+    critique.prompt = "Critique the draft above for accuracy and clarity in 2 short bullets.";
+    const auto critiqueId = graph.addTask(critique);
+    graph.addDependency(critiqueId, draftId);
+
+    orch::WorkspaceManager workspace;
+    orch::AgentManager agents;
+
+    rt::ProcessTaskExecutor executor(
+        registry, [](const orch::ExecRequest&, std::string_view text) {
+            std::cout << text << std::flush;
+        });
+
+    orch::Orchestrator orchestrator(graph, executor, workspace, agents);
+    orchestrator.setObserver([&](const orch::OrchestratorEvent& e) {
+        using T = orch::OrchestratorEvent::Type;
+        const std::string& name = graph.at(e.task).name;
+        if (e.type == T::TaskStarted) {
+            std::cout << "\n\n=== [" << name << "] running (agent " << e.agent.value()
+                      << ") ===\n";
+        } else if (e.type == T::TaskSucceeded) {
+            std::cout << "\n--- [" << name << "] done ---\n";
+        } else if (e.type == T::TaskFailed) {
+            std::cout << "\n!!! [" << name << "] FAILED: " << e.detail << "\n";
+        }
+    });
+
+    std::cout << "maestro-cli :: graph pipeline on topic: \"" << topic << "\"\n";
+    const orch::RunReport report = orchestrator.run();
+
+    std::cout << "\n==================================================\n"
+              << "pipeline complete: " << report.succeeded << " succeeded, " << report.failed
+              << " failed, " << report.blocked << " blocked\n";
+    if (const auto critiqueOut = workspace.getArtifact("task/critique/output")) {
+        std::cout << "\nfinal critique artifact stored in workspace ("
+                  << critiqueOut->size() << " bytes)\n";
+    }
+    return report.failed == 0 ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc >= 2 && std::string(argv[1]) == "--graph") {
+        std::string topic;
+        for (int i = 2; i < argc; ++i) {
+            if (!topic.empty()) topic += ' ';
+            topic += argv[i];
+        }
+        if (topic.empty()) {
+            topic = "directed acyclic graphs in build systems";
+        }
+        return runGraph(topic);
+    }
+
     if (argc >= 2 && std::string(argv[1]) == "--exec") {
         ProcessSpec spec;
         if (argc < 3) {
