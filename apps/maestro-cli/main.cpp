@@ -167,7 +167,8 @@ int runGraph(const std::string& topic) {
     orch::AgentManager agents;
 
     rt::ProcessTaskExecutor executor(
-        registry, [](const orch::ExecRequest&, std::string_view text) {
+        registry, []() { return std::make_unique<PosixProcessBackend>(); },
+        [](const orch::ExecRequest&, std::string_view text) {
             std::cout << text << std::flush;
         });
 

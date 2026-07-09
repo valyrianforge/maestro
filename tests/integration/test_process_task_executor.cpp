@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "maestro/orchestrator/Orchestrator.hpp"
+#include "maestro/process/PosixProcessBackend.hpp"
 #include "maestro/providers/GenericCliProvider.hpp"
 #include "maestro/runtime/ProcessTaskExecutor.hpp"
 #include "maestro/runtime/ProviderRegistry.hpp"
@@ -24,7 +25,8 @@ std::shared_ptr<GenericCliProvider> echoProvider() {
 TEST_CASE("executor runs a real command and returns its output", "[integration]") {
     ProviderRegistry registry;
     registry.add(echoProvider());
-    ProcessTaskExecutor executor(registry);
+    ProcessTaskExecutor executor(
+        registry, []() { return std::make_unique<maestro::process::PosixProcessBackend>(); });
 
     ExecRequest req;
     req.provider = ProviderId{"echo"};
@@ -37,7 +39,8 @@ TEST_CASE("executor runs a real command and returns its output", "[integration]"
 
 TEST_CASE("executor reports failure for an unregistered provider", "[integration]") {
     ProviderRegistry registry;
-    ProcessTaskExecutor executor(registry);
+    ProcessTaskExecutor executor(
+        registry, []() { return std::make_unique<maestro::process::PosixProcessBackend>(); });
 
     ExecRequest req;
     req.provider = ProviderId{"ghost"};
@@ -51,7 +54,8 @@ TEST_CASE("executor reports failure for an unregistered provider", "[integration
 TEST_CASE("a full graph runs end-to-end through the real executor", "[integration]") {
     ProviderRegistry registry;
     registry.add(echoProvider());
-    ProcessTaskExecutor executor(registry);
+    ProcessTaskExecutor executor(
+        registry, []() { return std::make_unique<maestro::process::PosixProcessBackend>(); });
 
     TaskGraph g;
     Task a;

@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "maestro/process/IProcessBackend.hpp"
+#include "maestro/process/IPumpedBackend.hpp"
 
 namespace maestro::process {
 
@@ -15,7 +15,7 @@ namespace maestro::process {
 //
 // I/O is pumped cooperatively: call processEvents() (or runUntilIdle()) from
 // the owning loop. There are no background threads.
-class PosixProcessBackend final : public IProcessBackend {
+class PosixProcessBackend final : public IPumpedBackend {
 public:
     ~PosixProcessBackend() override;
 
@@ -27,10 +27,10 @@ public:
     // Pump I/O once, blocking up to timeoutMs for activity. Reads available
     // output, emits callbacks, and reaps finished children. Returns true while
     // any child is still running.
-    bool processEvents(int timeoutMs);
+    bool processEvents(int timeoutMs) override;
 
     // Block, pumping events, until every started child has exited.
-    void runUntilIdle();
+    void runUntilIdle() override;
 
     [[nodiscard]] bool anyRunning() const noexcept { return !children_.empty(); }
 

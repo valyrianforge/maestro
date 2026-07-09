@@ -77,8 +77,10 @@ if(MAESTRO_WITH_QT)
     list(PREPEND CMAKE_FRAMEWORK_PATH "${_agl_stub_dir}")
   endif()
 
-  find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+  add_subdirectory(libs/process_qt)
   add_subdirectory(apps/maestro-desktop)
+  add_subdirectory(tools/qt-smoke)
 endif()
 
 if(MAESTRO_BUILD_TESTS)

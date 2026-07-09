@@ -1,15 +1,10 @@
 # maestro_runtime: wiring that connects the pure orchestrator domain to real
-# process execution (providers + process layer). POSIX for now (uses
-# PosixProcessBackend); QtProcessBackend will make it cross-platform later.
-set(MAESTRO_RUNTIME_SOURCES
+# process execution. Platform-agnostic: ProcessTaskExecutor takes a backend
+# factory, so callers pick PosixProcessBackend or QtProcessBackend.
+add_library(maestro_runtime
   src/ProviderRegistry.cpp
-  src/ResultCollector.cpp)
-
-if(NOT WIN32)
-  list(APPEND MAESTRO_RUNTIME_SOURCES src/ProcessTaskExecutor.cpp)
-endif()
-
-add_library(maestro_runtime ${MAESTRO_RUNTIME_SOURCES})
+  src/ResultCollector.cpp
+  src/ProcessTaskExecutor.cpp)
 add_library(maestro::runtime ALIAS maestro_runtime)
 
 target_include_directories(maestro_runtime PUBLIC

@@ -11,7 +11,8 @@ qt_add_executable(maestro-desktop MACOSX_BUNDLE ${MAESTRO_DESKTOP_SOURCES})
 
 target_link_libraries(maestro-desktop PRIVATE
   Qt6::Widgets
-  maestro::runtime) # transitively: orchestrator, providers, process, core
+  maestro::runtime      # transitively: orchestrator, providers, process, core
+  maestro::process_qt)  # cross-platform QtProcessBackend
 
 set_target_properties(maestro-desktop PROPERTIES
   MACOSX_BUNDLE_BUNDLE_NAME "Maestro"

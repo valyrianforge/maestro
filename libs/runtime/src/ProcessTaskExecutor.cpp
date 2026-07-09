@@ -1,6 +1,5 @@
 #include "maestro/runtime/ProcessTaskExecutor.hpp"
 
-#include "maestro/process/PosixProcessBackend.hpp"
 #include "maestro/process/ProcessManager.hpp"
 #include "maestro/providers/NdjsonLineReader.hpp"
 #include "maestro/runtime/ResultCollector.hpp"
@@ -10,15 +9,16 @@ namespace maestro::runtime {
 using core::ProcessExit;
 using core::TaskChunk;
 using core::TaskRequest;
-using process::PosixProcessBackend;
 using process::ProcessCallbacks;
 using process::ProcessManager;
 using process::RestartPolicy;
 using providers::NdjsonLineReader;
 
 ProcessTaskExecutor::ProcessTaskExecutor(const ProviderRegistry& registry,
-                                         StreamHook onAssistantText)
-    : registry_(registry), onAssistantText_(std::move(onAssistantText)) {}
+                                         BackendFactory backendFactory, StreamHook onAssistantText)
+    : registry_(registry),
+      backendFactory_(std::move(backendFactory)),
+      onAssistantText_(std::move(onAssistantText)) {}
 
 TaskResult ProcessTaskExecutor::execute(const ExecRequest& request) {
     const auto provider = registry_.get(request.provider);
@@ -35,8 +35,8 @@ TaskResult ProcessTaskExecutor::execute(const ExecRequest& request) {
     treq.workingDirectory = request.workingDirectory;
     const auto spec = provider->buildSpec(treq);
 
-    PosixProcessBackend backend;
-    ProcessManager manager(backend);
+    auto backend = backendFactory_();
+    ProcessManager manager(*backend);
     NdjsonLineReader reader;
     ResultCollector collector;
     ProcessExit exitStatus{core::ExitReason::Crashed, -1};
@@ -65,7 +65,7 @@ TaskResult ProcessTaskExecutor::execute(const ExecRequest& request) {
                       }});
 
     while (!done) {
-        backend.processEvents(200);
+        backend->processEvents(200);
     }
     if (const auto tail = reader.flush()) {
         handleLine(*tail);

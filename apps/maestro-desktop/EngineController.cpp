@@ -4,6 +4,7 @@
 #include <string>
 
 #include "maestro/orchestrator/Orchestrator.hpp"
+#include "maestro/process_qt/QtProcessBackend.hpp"
 #include "maestro/providers/ClaudeProvider.hpp"
 #include "maestro/runtime/ProcessTaskExecutor.hpp"
 #include "maestro/runtime/ProviderRegistry.hpp"
@@ -82,10 +83,12 @@ void EngineController::startRun(bool pipeline, QString text) {
 
         std::string currentTask;
         rt::ProcessTaskExecutor executor(
-            registry, [this, &currentTask](const orch::ExecRequest&, std::string_view chunk) {
+            registry,
+            []() { return std::make_unique<maestro::process::QtProcessBackend>(); },
+            [this, &currentTask](const orch::ExecRequest&, std::string_view chunk) {
                 emit assistantText(QString::fromStdString(currentTask),
                                    QString::fromUtf8(chunk.data(),
-                                                     static_cast<int>(chunk.size())));
+                                                     static_cast<qsizetype>(chunk.size())));
             });
 
         orch::Orchestrator orchestrator(graph, executor, workspace, agents);
