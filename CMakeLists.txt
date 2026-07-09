@@ -28,6 +28,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# --- Third-party: SQLiteCpp (bundles sqlite3; cross-platform persistence) ---
+set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
+set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
+set(SQLITECPP_INTERNAL_SQLITE ON CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  SQLiteCpp
+  GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
+  GIT_TAG        3.3.2
+  GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(SQLiteCpp)
+
 # --- Third-party: Catch2 (only when tests are on) ---
 if(MAESTRO_BUILD_TESTS)
   FetchContent_Declare(
@@ -46,6 +58,7 @@ add_subdirectory(libs/core)
 add_subdirectory(libs/process)
 add_subdirectory(libs/providers)
 add_subdirectory(libs/orchestrator)
+add_subdirectory(libs/storage)
 add_subdirectory(libs/runtime)
 
 # Console harness (real POSIX process driving). Not built on Windows until the

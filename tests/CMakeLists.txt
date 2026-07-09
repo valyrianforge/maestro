@@ -10,7 +10,9 @@ set(MAESTRO_TEST_SOURCES
   unit/test_workspace.cpp
   unit/test_orchestrator.cpp
   unit/test_scheduler.cpp
-  unit/test_result_collector.cpp)
+  unit/test_result_collector.cpp
+  unit/test_sqlite_store.cpp
+  integration/test_run_recorder.cpp)
 
 if(NOT WIN32)
   # Integration tests exercise the real POSIX backend against system commands.

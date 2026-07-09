@@ -4,7 +4,8 @@
 add_library(maestro_runtime
   src/ProviderRegistry.cpp
   src/ResultCollector.cpp
-  src/ProcessTaskExecutor.cpp)
+  src/ProcessTaskExecutor.cpp
+  src/RunRecorder.cpp)
 add_library(maestro::runtime ALIAS maestro_runtime)
 
 target_include_directories(maestro_runtime PUBLIC
@@ -14,7 +15,8 @@ target_link_libraries(maestro_runtime PUBLIC
   maestro::core
   maestro::orchestrator
   maestro::providers
-  maestro::process)
+  maestro::process
+  maestro::storage)
 
 target_compile_features(maestro_runtime PUBLIC cxx_std_20)
 maestro_set_warnings(maestro_runtime)
