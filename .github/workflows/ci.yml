@@ -1,0 +1,28 @@
+name: ci
+
+# Validates every PR (into staging or main) and every push to staging.
+# This is the gate for the "PR -> staging" half of the workflow: nothing
+# reaches staging without a green build + tests.
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & Test (Linux, no Qt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (no Qt, tests on)
+        run: cmake -S . -B build -DMAESTRO_WITH_QT=OFF -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
