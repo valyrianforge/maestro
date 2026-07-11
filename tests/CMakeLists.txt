@@ -1,5 +1,7 @@
 set(MAESTRO_TEST_SOURCES
   unit/test_smoke.cpp
+  unit/test_jsonrpc.cpp
+  unit/test_acp_client.cpp
   unit/test_process_manager.cpp
   unit/test_ndjson_reader.cpp
   unit/test_claude_provider.cpp
@@ -25,6 +27,7 @@ add_executable(maestro_unit_tests ${MAESTRO_TEST_SOURCES})
 
 target_link_libraries(maestro_unit_tests PRIVATE
   Catch2::Catch2WithMain
+  maestro::acp
   maestro::runtime) # transitively brings core/process/providers/orchestrator
 
 catch_discover_tests(maestro_unit_tests)

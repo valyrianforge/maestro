@@ -55,6 +55,7 @@ if(MAESTRO_BUILD_TESTS)
 endif()
 
 add_subdirectory(libs/core)
+add_subdirectory(libs/acp)
 add_subdirectory(libs/process)
 add_subdirectory(libs/providers)
 add_subdirectory(libs/orchestrator)
