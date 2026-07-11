@@ -6,6 +6,7 @@ set(MAESTRO_TEST_SOURCES
   unit/test_steer_queue.cpp
   unit/test_session_controller.cpp
   unit/test_session_manager.cpp
+  unit/test_nucleus.cpp
   unit/test_process_manager.cpp
   unit/test_ndjson_reader.cpp
   unit/test_claude_provider.cpp

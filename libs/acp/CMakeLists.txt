@@ -6,7 +6,10 @@ add_library(maestro_acp
   src/AcpClient.cpp
   src/ApprovalBroker.cpp
   src/SessionController.cpp
-  src/SessionManager.cpp)
+  src/SessionManager.cpp
+  src/Plan.cpp
+  src/PlanApprovalGate.cpp
+  src/Nucleus.cpp)
 add_library(maestro::acp ALIAS maestro_acp)
 
 target_include_directories(maestro_acp PUBLIC
