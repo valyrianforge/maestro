@@ -7,6 +7,7 @@ set(MAESTRO_TEST_SOURCES
   unit/test_session_controller.cpp
   unit/test_session_manager.cpp
   unit/test_nucleus.cpp
+  unit/test_worktree_manager.cpp
   unit/test_process_manager.cpp
   unit/test_ndjson_reader.cpp
   unit/test_claude_provider.cpp
@@ -25,7 +26,8 @@ if(NOT WIN32)
   # Integration tests exercise the real POSIX backend against system commands.
   list(APPEND MAESTRO_TEST_SOURCES
     integration/test_posix_backend.cpp
-    integration/test_process_task_executor.cpp)
+    integration/test_process_task_executor.cpp
+    integration/test_worktree_integration.cpp)
 endif()
 
 add_executable(maestro_unit_tests ${MAESTRO_TEST_SOURCES})
@@ -33,6 +35,7 @@ add_executable(maestro_unit_tests ${MAESTRO_TEST_SOURCES})
 target_link_libraries(maestro_unit_tests PRIVATE
   Catch2::Catch2WithMain
   maestro::acp
+  maestro::worktree
   maestro::runtime) # transitively brings core/process/providers/orchestrator
 
 catch_discover_tests(maestro_unit_tests)
