@@ -46,6 +46,23 @@ public:
     [[nodiscard]] std::vector<AgentRecord> agentsForRun(std::int64_t runId);
     [[nodiscard]] std::vector<EventRecord> eventsForRun(std::int64_t runId);
 
+    // --- v2: live sessions (nucleus + workers), survive restart ---
+    void upsertSession(const SessionRecord& session);
+    void updateSessionState(const std::string& sessionId, const std::string& state);
+    void removeSession(const std::string& sessionId);
+    [[nodiscard]] std::vector<SessionRecord> listSessions();
+    [[nodiscard]] std::vector<SessionRecord> childSessions(const std::string& parentId);
+
+    // --- v2: proposed plans + approval status ---
+    std::int64_t savePlan(const PlanRecord& plan);
+    void setPlanStatus(std::int64_t planId, const std::string& status);
+    [[nodiscard]] std::optional<PlanRecord> getPlan(std::int64_t planId);
+
+    // --- v2: append-only decision log ---
+    std::int64_t appendDecision(const DecisionRecord& decision);
+    [[nodiscard]] std::vector<DecisionRecord> decisionsForSession(const std::string& sessionId);
+    [[nodiscard]] std::vector<DecisionRecord> recentDecisions(int limit = 100);
+
     // --- config key/value ---
     void setConfig(const std::string& key, const std::string& value);
     [[nodiscard]] std::optional<std::string> getConfig(const std::string& key);

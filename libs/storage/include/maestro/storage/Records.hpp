@@ -57,4 +57,36 @@ struct EventRecord {
     std::string detail;
 };
 
+// --- v2 interactive orchestration records ---
+
+// A live ACP session (nucleus or worker). Persisted so the agent graph and its
+// nucleus->electron structure survive a restart. Keyed by the opaque session id.
+struct SessionRecord {
+    std::string sessionId;
+    std::string role;      // "nucleus" | "worker" | label
+    std::string parentId;  // "" if none (the nucleus); else the parent session id
+    std::string state;     // "idle" | "busy" | "done" | "error"
+    std::string createdAt;
+};
+
+// A fan-out plan the nucleus proposed. workersJson is the opaque serialized
+// WorkerSpec list (storage stays decoupled from the acp layer).
+struct PlanRecord {
+    std::int64_t id{0};
+    std::string nucleusSessionId;
+    std::string status;      // "proposed" | "approved" | "rejected"
+    std::string workersJson;
+    std::string createdAt;
+};
+
+// One entry in the append-only decision log: approvals, denials, steers, plan
+// decisions — the audit trail of who-decided-what.
+struct DecisionRecord {
+    std::int64_t id{0};
+    std::string sessionId; // "" for plan-level decisions
+    std::string ts;
+    std::string kind;      // "plan_approved" | "tool_allowed" | "tool_denied" | "steer" | ...
+    std::string detail;
+};
+
 } // namespace maestro::storage

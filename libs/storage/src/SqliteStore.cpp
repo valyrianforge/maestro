@@ -62,9 +62,30 @@ void SqliteStore::migrate() {
         CREATE TABLE IF NOT EXISTS config (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL);
+        -- v2 interactive orchestration --
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_id TEXT PRIMARY KEY,
+            role TEXT NOT NULL,
+            parent_id TEXT,
+            state TEXT NOT NULL,
+            created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nucleus_session_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            workers_json TEXT,
+            created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS decision_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            ts TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            detail TEXT);
         CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
         CREATE INDEX IF NOT EXISTS idx_tasks_run ON tasks(run_id);
         CREATE INDEX IF NOT EXISTS idx_events_run ON events(run_id, seq);
+        CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_id);
+        CREATE INDEX IF NOT EXISTS idx_decisions_session ON decision_log(session_id, id);
     )");
 }
 
@@ -262,6 +283,151 @@ std::vector<EventRecord> SqliteStore::eventsForRun(std::int64_t runId) {
         e.agentId = q.getColumn(5).getInt64();
         e.detail = q.getColumn(6).getString();
         out.push_back(std::move(e));
+    }
+    return out;
+}
+
+void SqliteStore::upsertSession(const SessionRecord& session) {
+    SQLite::Statement q(*db_,
+                        "INSERT INTO sessions(session_id, role, parent_id, state, created_at) "
+                        "VALUES(?,?,?,?,?) "
+                        "ON CONFLICT(session_id) DO UPDATE SET "
+                        "role=excluded.role, parent_id=excluded.parent_id, state=excluded.state");
+    q.bind(1, session.sessionId);
+    q.bind(2, session.role);
+    q.bind(3, session.parentId);
+    q.bind(4, session.state);
+    q.bind(5, session.createdAt);
+    q.exec();
+}
+
+void SqliteStore::updateSessionState(const std::string& sessionId, const std::string& state) {
+    SQLite::Statement q(*db_, "UPDATE sessions SET state=? WHERE session_id=?");
+    q.bind(1, state);
+    q.bind(2, sessionId);
+    q.exec();
+}
+
+void SqliteStore::removeSession(const std::string& sessionId) {
+    SQLite::Statement q(*db_, "DELETE FROM sessions WHERE session_id=?");
+    q.bind(1, sessionId);
+    q.exec();
+}
+
+namespace {
+SessionRecord readSession(SQLite::Statement& q) {
+    SessionRecord s;
+    s.sessionId = q.getColumn(0).getString();
+    s.role = q.getColumn(1).getString();
+    s.parentId = q.getColumn(2).getString();
+    s.state = q.getColumn(3).getString();
+    s.createdAt = q.getColumn(4).getString();
+    return s;
+}
+} // namespace
+
+std::vector<SessionRecord> SqliteStore::listSessions() {
+    std::vector<SessionRecord> out;
+    SQLite::Statement q(*db_,
+                        "SELECT session_id, role, IFNULL(parent_id,''), state, created_at "
+                        "FROM sessions ORDER BY created_at, session_id");
+    while (q.executeStep()) {
+        out.push_back(readSession(q));
+    }
+    return out;
+}
+
+std::vector<SessionRecord> SqliteStore::childSessions(const std::string& parentId) {
+    std::vector<SessionRecord> out;
+    SQLite::Statement q(*db_,
+                        "SELECT session_id, role, IFNULL(parent_id,''), state, created_at "
+                        "FROM sessions WHERE parent_id=? ORDER BY created_at, session_id");
+    q.bind(1, parentId);
+    while (q.executeStep()) {
+        out.push_back(readSession(q));
+    }
+    return out;
+}
+
+std::int64_t SqliteStore::savePlan(const PlanRecord& plan) {
+    SQLite::Statement q(*db_,
+                        "INSERT INTO plans(nucleus_session_id, status, workers_json, created_at) "
+                        "VALUES(?,?,?,?)");
+    q.bind(1, plan.nucleusSessionId);
+    q.bind(2, plan.status);
+    q.bind(3, plan.workersJson);
+    q.bind(4, plan.createdAt);
+    q.exec();
+    return db_->getLastInsertRowid();
+}
+
+void SqliteStore::setPlanStatus(std::int64_t planId, const std::string& status) {
+    SQLite::Statement q(*db_, "UPDATE plans SET status=? WHERE id=?");
+    q.bind(1, status);
+    q.bind(2, planId);
+    q.exec();
+}
+
+std::optional<PlanRecord> SqliteStore::getPlan(std::int64_t planId) {
+    SQLite::Statement q(*db_,
+                        "SELECT id, nucleus_session_id, status, IFNULL(workers_json,''), created_at "
+                        "FROM plans WHERE id=?");
+    q.bind(1, planId);
+    if (!q.executeStep()) {
+        return std::nullopt;
+    }
+    PlanRecord p;
+    p.id = q.getColumn(0).getInt64();
+    p.nucleusSessionId = q.getColumn(1).getString();
+    p.status = q.getColumn(2).getString();
+    p.workersJson = q.getColumn(3).getString();
+    p.createdAt = q.getColumn(4).getString();
+    return p;
+}
+
+std::int64_t SqliteStore::appendDecision(const DecisionRecord& decision) {
+    SQLite::Statement q(*db_,
+                        "INSERT INTO decision_log(session_id, ts, kind, detail) VALUES(?,?,?,?)");
+    q.bind(1, decision.sessionId);
+    q.bind(2, decision.ts);
+    q.bind(3, decision.kind);
+    q.bind(4, decision.detail);
+    q.exec();
+    return db_->getLastInsertRowid();
+}
+
+namespace {
+DecisionRecord readDecision(SQLite::Statement& q) {
+    DecisionRecord d;
+    d.id = q.getColumn(0).getInt64();
+    d.sessionId = q.getColumn(1).getString();
+    d.ts = q.getColumn(2).getString();
+    d.kind = q.getColumn(3).getString();
+    d.detail = q.getColumn(4).getString();
+    return d;
+}
+} // namespace
+
+std::vector<DecisionRecord> SqliteStore::decisionsForSession(const std::string& sessionId) {
+    std::vector<DecisionRecord> out;
+    SQLite::Statement q(*db_,
+                        "SELECT id, IFNULL(session_id,''), ts, kind, IFNULL(detail,'') "
+                        "FROM decision_log WHERE session_id=? ORDER BY id");
+    q.bind(1, sessionId);
+    while (q.executeStep()) {
+        out.push_back(readDecision(q));
+    }
+    return out;
+}
+
+std::vector<DecisionRecord> SqliteStore::recentDecisions(int limit) {
+    std::vector<DecisionRecord> out;
+    SQLite::Statement q(*db_,
+                        "SELECT id, IFNULL(session_id,''), ts, kind, IFNULL(detail,'') "
+                        "FROM decision_log ORDER BY id DESC LIMIT ?");
+    q.bind(1, limit);
+    while (q.executeStep()) {
+        out.push_back(readDecision(q));
     }
     return out;
 }
