@@ -6,6 +6,7 @@ set(MAESTRO_DESKTOP_SOURCES
   main.cpp
   MainWindow.cpp
   GraphCanvas.cpp
+  ApprovalPanel.cpp
   EngineController.cpp)
 
 qt_add_executable(maestro-desktop MACOSX_BUNDLE ${MAESTRO_DESKTOP_SOURCES})
