@@ -17,6 +17,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "ApprovalPanel.hpp"
 #include "EngineController.hpp"
 #include "GraphCanvas.hpp"
 
@@ -36,6 +37,12 @@ MainWindow::MainWindow(EngineController* controller, QWidget* parent)
             &MainWindow::onTaskStateChanged);
     connect(controller_, &EngineController::assistantText, this, &MainWindow::onAssistantText);
     connect(controller_, &EngineController::agentStatus, this, &MainWindow::onAgentStatus);
+
+    // v2 interactive surfaces.
+    connect(graph_, &GraphCanvas::nodeClicked, this, &MainWindow::onNodeClicked);
+    connect(approvals_, &ApprovalPanel::planApproved, this, &MainWindow::onPlanApproved);
+    connect(approvals_, &ApprovalPanel::planRejected, this, &MainWindow::onPlanRejected);
+    connect(approvals_, &ApprovalPanel::actionDecision, this, &MainWindow::onActionDecision);
 }
 
 void MainWindow::buildUi() {
@@ -104,6 +111,12 @@ void MainWindow::buildUi() {
     leftDock->setWidget(leftPanel);
     leftDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::LeftDockWidgetArea, leftDock);
+
+    // --- Right dock: the human-in-the-loop approval surface ---
+    approvals_ = new ApprovalPanel(this);
+    auto* approvalDock = new QDockWidget("Approvals", this);
+    approvalDock->setWidget(approvals_);
+    addDockWidget(Qt::RightDockWidgetArea, approvalDock);
 
     // --- Bottom dock: live logs ---
     logs_ = new QPlainTextEdit(this);
@@ -204,6 +217,29 @@ void MainWindow::onAgentStatus(quint64 agentId, const QString& provider, const Q
         agentRow_.insert(agentId, row);
     }
     agentsTable_->setItem(row, 2, new QTableWidgetItem(status));
+}
+
+// --- v2 interactive surfaces ---
+// NOTE: these currently log the intent. Wiring them to the live ACP engine
+// (GraphCanvas node -> SessionController inspector/steer; planApproved ->
+// PlanApprovalGate::approve; actionDecision -> ApprovalBroker::resolve) is the
+// M9 "real adapter" step, which needs a running claude-code-acp session.
+void MainWindow::onNodeClicked(const QString& name) {
+    conversation_->append(QString("\n— inspecting agent [%1] —").arg(name));
+    statusLabel_->setText(QString("Selected agent: %1").arg(name));
+}
+
+void MainWindow::onPlanApproved() {
+    logs_->appendPlainText("[approval] plan approved — spawning workers");
+}
+
+void MainWindow::onPlanRejected() {
+    logs_->appendPlainText("[approval] plan rejected");
+}
+
+void MainWindow::onActionDecision(const QString& requestId, bool allow) {
+    logs_->appendPlainText(QString("[approval] action %1: %2")
+                               .arg(requestId, allow ? "ALLOWED" : "DENIED"));
 }
 
 } // namespace maestro::desktop

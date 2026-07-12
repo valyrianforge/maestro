@@ -1,14 +1,18 @@
 #include "GraphCanvas.hpp"
 
 #include <QBrush>
+#include <QGraphicsEllipseItem>
 #include <QGraphicsPathItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsSimpleTextItem>
+#include <QMouseEvent>
 #include <QPainterPath>
 #include <QPen>
+#include <QTimer>
 
 #include <algorithm>
+#include <memory>
 
 namespace maestro::desktop {
 
@@ -26,6 +30,63 @@ GraphCanvas::GraphCanvas(QWidget* parent) : QGraphicsView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
     setBackgroundBrush(QColor("#1a1b1e"));
     setDragMode(QGraphicsView::ScrollHandDrag);
+
+    // Drive the running-node pulse.
+    pulseTimer_ = new QTimer(this);
+    connect(pulseTimer_, &QTimer::timeout, this, &GraphCanvas::onPulse);
+    pulseTimer_->start(450);
+}
+
+void GraphCanvas::mousePressEvent(QMouseEvent* event) {
+    if (const QGraphicsItem* hit = itemAt(event->pos())) {
+        for (auto it = nodes_.begin(); it != nodes_.end(); ++it) {
+            if (it->box == hit || it->title == hit || it->subtitle == hit) {
+                emit nodeClicked(it.key());
+                break;
+            }
+        }
+    }
+    QGraphicsView::mousePressEvent(event); // keep pan/scroll behaviour
+}
+
+void GraphCanvas::onPulse() {
+    pulseOn_ = !pulseOn_;
+    for (auto& node : nodes_) {
+        if (node.state == "running" && node.box) {
+            node.box->setPen(QPen(QColor("#4c6ef5"), pulseOn_ ? 4.0 : 2.0));
+        }
+    }
+}
+
+void GraphCanvas::flashMessage(const QString& from, const QString& to) {
+    QPainterPath path;
+    for (const Edge& e : edges_) {
+        if (e.from == from && e.to == to && e.path) {
+            path = e.path->path();
+            break;
+        }
+    }
+    if (path.isEmpty()) {
+        return;
+    }
+    auto* dot = scene_->addEllipse(-5, -5, 10, 10, QPen(Qt::NoPen), QBrush(QColor("#ffd43b")));
+    dot->setZValue(3);
+    dot->setPos(path.pointAtPercent(0.0));
+
+    auto* timer = new QTimer(this);
+    auto progress = std::make_shared<qreal>(0.0);
+    connect(timer, &QTimer::timeout, this, [this, dot, timer, progress, path]() {
+        *progress += 0.04;
+        if (*progress >= 1.0) {
+            scene_->removeItem(dot);
+            delete dot;
+            timer->stop();
+            timer->deleteLater();
+            return;
+        }
+        dot->setPos(path.pointAtPercent(*progress));
+    });
+    timer->start(16);
 }
 
 QColor GraphCanvas::colorForState(const QString& state) {
@@ -70,6 +131,9 @@ void GraphCanvas::setNodeState(const QString& name, const QString& state) {
     }
     it->state = state;
     it->box->setBrush(QBrush(colorForState(state)));
+    if (state != "running") {
+        it->box->setPen(QPen(QColor("#4c6ef5"), 2.0)); // clear any pulse thickness
+    }
     it->subtitle->setText(it->provider + " · " + state);
     // Highlight outgoing edges once a node has produced output.
     if (state == "succeeded") {
