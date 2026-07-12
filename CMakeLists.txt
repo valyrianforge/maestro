@@ -99,6 +99,11 @@ if(MAESTRO_WITH_QT)
 endif()
 
 if(MAESTRO_BUILD_TESTS)
+  # Deterministic ACP agent helper for the process-integration test (POSIX,
+  # since that test drives the fork/exec PosixProcessBackend).
+  if(NOT WIN32)
+    add_subdirectory(tools/fake-acp-agent)
+  endif()
   add_subdirectory(tests)
 endif()
 

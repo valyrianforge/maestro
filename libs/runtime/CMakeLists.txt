@@ -13,6 +13,7 @@ target_include_directories(maestro_runtime PUBLIC
 
 target_link_libraries(maestro_runtime PUBLIC
   maestro::core
+  maestro::acp
   maestro::orchestrator
   maestro::providers
   maestro::process
