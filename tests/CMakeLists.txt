@@ -20,6 +20,7 @@ set(MAESTRO_TEST_SOURCES
   unit/test_scheduler.cpp
   unit/test_result_collector.cpp
   unit/test_sqlite_store.cpp
+  unit/test_sqlite_store_v2.cpp
   integration/test_run_recorder.cpp)
 
 if(NOT WIN32)
