@@ -28,7 +28,8 @@ if(NOT WIN32)
   list(APPEND MAESTRO_TEST_SOURCES
     integration/test_posix_backend.cpp
     integration/test_process_task_executor.cpp
-    integration/test_worktree_integration.cpp)
+    integration/test_worktree_integration.cpp
+    integration/test_acp_process_integration.cpp)
 endif()
 
 add_executable(maestro_unit_tests ${MAESTRO_TEST_SOURCES})
@@ -38,5 +39,13 @@ target_link_libraries(maestro_unit_tests PRIVATE
   maestro::acp
   maestro::worktree
   maestro::runtime) # transitively brings core/process/providers/orchestrator
+
+# The ACP process-integration test spawns the deterministic fake agent; hand it
+# the built binary's absolute path and ensure it is built first (POSIX only).
+if(NOT WIN32)
+  add_dependencies(maestro_unit_tests fake-acp-agent)
+  target_compile_definitions(maestro_unit_tests PRIVATE
+    FAKE_ACP_AGENT_PATH="$<TARGET_FILE:fake-acp-agent>")
+endif()
 
 catch_discover_tests(maestro_unit_tests)
