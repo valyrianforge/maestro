@@ -63,6 +63,26 @@ TEST_CASE("real process: stderr is routed separately from stdout", "[integration
     REQUIRE(err == "bad\n");
 }
 
+TEST_CASE("real process: bytes written to stdin reach the child and echo back", "[integration]") {
+    PosixProcessBackend backend;
+    ProcessManager mgr(backend);
+
+    std::string out;
+    const ProcessHandle h = mgr.spawn(
+        exec("cat", {}), RestartPolicy::none(),
+        ProcessCallbacks{[&](std::string_view s) { out += s; }, nullptr, nullptr});
+
+    // cat echoes stdin to stdout: proves the child's stdin pipe is writable.
+    mgr.writeStdin(h, "ping-over-stdin\n");
+    for (int i = 0; i < 50 && out.find('\n') == std::string::npos; ++i) {
+        backend.processEvents(50);
+    }
+    REQUIRE(out == "ping-over-stdin\n");
+
+    mgr.kill(h); // cat runs until EOF/signal; end the session
+    backend.runUntilIdle();
+}
+
 TEST_CASE("real process: a missing program is reported as failure, not a crash of us",
           "[integration]") {
     PosixProcessBackend backend;

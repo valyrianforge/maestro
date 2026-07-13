@@ -10,8 +10,9 @@ namespace maestro::process {
 // Real IProcessBackend for POSIX systems (macOS/Linux), built on
 // fork/exec/pipe/poll. This is a stepping stone that proves the ProcessManager
 // spine against actual OS processes before the cross-platform QtProcessBackend
-// exists. Child stdin is redirected from /dev/null (headless, prompt-via-argv
-// model), so write() is a safe no-op.
+// exists. Child stdin is a real pipe, so write() delivers bytes to the child —
+// this is what lets an interactive, bidirectional ACP agent be driven over
+// stdio. Closing our end (on kill/destroy) signals EOF to the child.
 //
 // I/O is pumped cooperatively: call processEvents() (or runUntilIdle()) from
 // the owning loop. There are no background threads.
@@ -38,6 +39,7 @@ private:
     struct Child {
         ProcessHandle handle{};
         ::pid_t pid{-1};
+        int stdinFd{-1}; // parent's write end of the child's stdin pipe
         int stdoutFd{-1};
         int stderrFd{-1};
         bool intentionalKill{false};

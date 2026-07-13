@@ -60,21 +60,24 @@ PosixProcessBackend::~PosixProcessBackend() {
             int status = 0;
             ::waitpid(c.pid, &status, 0);
         }
+        if (c.stdinFd >= 0) ::close(c.stdinFd);
         if (c.stdoutFd >= 0) ::close(c.stdoutFd);
         if (c.stderrFd >= 0) ::close(c.stderrFd);
     }
 }
 
 void PosixProcessBackend::start(ProcessHandle handle, const ProcessSpec& spec) {
+    int inPipe[2];
     int outPipe[2];
     int errPipe[2];
-    if (::pipe(outPipe) != 0 || ::pipe(errPipe) != 0) {
+    if (::pipe(inPipe) != 0 || ::pipe(outPipe) != 0 || ::pipe(errPipe) != 0) {
         if (observer_) observer_->onExit(handle, ProcessExit{core::ExitReason::Crashed, -1});
         return;
     }
 
     const ::pid_t pid = ::fork();
     if (pid < 0) {
+        ::close(inPipe[0]); ::close(inPipe[1]);
         ::close(outPipe[0]); ::close(outPipe[1]);
         ::close(errPipe[0]); ::close(errPipe[1]);
         if (observer_) observer_->onExit(handle, ProcessExit{core::ExitReason::Crashed, -1});
@@ -83,13 +86,10 @@ void PosixProcessBackend::start(ProcessHandle handle, const ProcessSpec& spec) {
 
     if (pid == 0) {
         // --- child ---
-        const int devNull = ::open("/dev/null", O_RDONLY);
-        if (devNull >= 0) {
-            ::dup2(devNull, STDIN_FILENO);
-            ::close(devNull);
-        }
+        ::dup2(inPipe[0], STDIN_FILENO);
         ::dup2(outPipe[1], STDOUT_FILENO);
         ::dup2(errPipe[1], STDERR_FILENO);
+        ::close(inPipe[0]); ::close(inPipe[1]);
         ::close(outPipe[0]); ::close(outPipe[1]);
         ::close(errPipe[0]); ::close(errPipe[1]);
 
@@ -120,15 +120,35 @@ void PosixProcessBackend::start(ProcessHandle handle, const ProcessSpec& spec) {
     }
 
     // --- parent ---
+    ::close(inPipe[0]);  // parent keeps the write end
     ::close(outPipe[1]);
     ::close(errPipe[1]);
     setNonBlocking(outPipe[0]);
     setNonBlocking(errPipe[0]);
-    children_.push_back(Child{handle, pid, outPipe[0], errPipe[0], false});
+    children_.push_back(Child{handle, pid, inPipe[1], outPipe[0], errPipe[0], false});
 }
 
-void PosixProcessBackend::write(ProcessHandle /*handle*/, std::string_view /*data*/) {
-    // Child stdin is /dev/null in this backend; stdin writes are unsupported.
+void PosixProcessBackend::write(ProcessHandle handle, std::string_view data) {
+    const auto it = std::find_if(children_.begin(), children_.end(),
+                                 [&](const Child& c) { return c.handle == handle; });
+    if (it == children_.end() || it->stdinFd < 0) {
+        return; // unknown handle or stdin already closed: safe no-op
+    }
+
+    // Write all bytes, tolerating partial writes and EINTR. A broken pipe
+    // (child gone) is swallowed — it surfaces as an exit via the output streams.
+    std::size_t offset = 0;
+    while (offset < data.size()) {
+        const ssize_t n = ::write(it->stdinFd, data.data() + offset, data.size() - offset);
+        if (n > 0) {
+            offset += static_cast<std::size_t>(n);
+            continue;
+        }
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        break; // EAGAIN on a full buffer, or EPIPE: stop
+    }
 }
 
 void PosixProcessBackend::kill(ProcessHandle handle) {
@@ -213,6 +233,11 @@ void PosixProcessBackend::reapByHandle(ProcessHandle handle) {
     }
     const ::pid_t pid = it->pid;
     const bool killed = it->intentionalKill;
+
+    if (it->stdinFd >= 0) {
+        ::close(it->stdinFd); // signals EOF to the child and frees the fd
+        it->stdinFd = -1;
+    }
 
     int status = 0;
     ::waitpid(pid, &status, 0);
